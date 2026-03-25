@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+
+<title>PocketLedger Login</title>
+
+<link rel="stylesheet" href="css/style.css">
+
+</head>
+
+<body>
+
+<div class="login-container">
+
+<h2>PocketLedger Login</h2>
+
+<input id="email" type="email" placeholder="Email">
+
+<input id="password" type="password" placeholder="Password">
+
+<button onclick="login()">Login</button>
+
+<p>
+Don't have an account?
+<a href="signup.html">Create Account</a>
+</p>
+
+</div>
+
+
+<script type="module">
+
+import {auth,signInWithEmailAndPassword} from "./js/firebase.js"
+
+window.login=function(){
+
+let email=document.getElementById("email").value
+let password=document.getElementById("password").value
+
+if(email==="" || password===""){
+alert("Please enter email and password")
+return
+}
+
+signInWithEmailAndPassword(auth,email,password)
+
+.then(()=>{
+
+window.location="home.html"
+
+})
+
+.catch(e=>{
+
+alert(e.message)
+
+})
+
+}
+
+</script>
+
+</body>
+
+</html>

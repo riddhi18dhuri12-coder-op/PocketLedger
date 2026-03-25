@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+
+<title>Expense Analytics</title>
+
+<link rel="stylesheet" href="css/style.css">
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+</head>
+
+<body>
+
+<div class="app-layout">
+
+<div class="sidebar">
+
+<h2>PocketLedger</h2>
+
+<a href="home.html">Home</a>
+<a href="dashboard.html">Dashboard</a>
+<a href="bills.html">My Bills</a>
+
+</div>
+
+<div class="main-content">
+
+<h2>Expense Analytics</h2>
+
+<select id="monthFilter" onchange="applyMonthFilter()">
+<option value="">All Months</option>
+<option value="0">January</option>
+<option value="1">February</option>
+<option value="2">March</option>
+<option value="3">April</option>
+<option value="4">May</option>
+<option value="5">June</option>
+<option value="6">July</option>
+<option value="7">August</option>
+<option value="8">September</option>
+<option value="9">October</option>
+<option value="10">November</option>
+<option value="11">December</option>
+</select>
+
+
+<div class="analytics-cards">
+
+<div class="card">
+<h3>Total Spending</h3>
+<h2 id="totalSpend">Rs 0</h2>
+</div>
+
+<div class="card">
+<h3>Average Expense</h3>
+<h2 id="avgExpense">Rs 0</h2>
+</div>
+
+<div class="card">
+<h3>Top Category</h3>
+<h2 id="topCategory">-</h2>
+</div>
+
+</div>
+
+
+<h3>Expense Categories</h3>
+<canvas id="expenseChart"></canvas>
+
+<h3>Monthly Spending Trend</h3>
+<canvas id="monthlyChart"></canvas>
+
+
+<h3>Top 3 Biggest Expenses</h3>
+
+<table>
+
+<thead>
+<tr>
+<th>Date</th>
+<th>Expense</th>
+<th>Category</th>
+<th>Amount</th>
+</tr>
+</thead>
+
+<tbody id="topExpenses"></tbody>
+
+</table>
+
+
+<h3>Category Summary</h3>
+
+<table>
+
+<thead>
+<tr>
+<th>Category</th>
+<th>Total Amount</th>
+</tr>
+</thead>
+
+<tbody id="summaryTable"></tbody>
+
+</table>
+
+
+<h3>Insights</h3>
+
+<ul id="insights"></ul>
+
+<br>
+
+<button onclick="goBack()">Back to Bills</button>
+
+</div>
+
+</div>
+
+
+<script type="module">
+
+import {
+auth,db,
+ref,onValue,
+onAuthStateChanged
+} from "./js/firebase.js"
+
+let uid
+let allBills=[]
+let pieChart
+let monthlyChart
+
+
+function parseDate(dateString){
+
+let parts=dateString.split("/")
+
+let day=parseInt(parts[0])
+let month=parseInt(parts[1]) - 1
+let year=parseInt(parts[2])
+
+return new Date(year,month,day)
+
+}
+
+
+onAuthStateChanged(auth,user=>{
+
+if(user){
+
+uid=user.uid
+loadBills()
+
+}else{
+
+window.location="index.html"
+
+}
+
+})
+
+
+function loadBills(){
+
+const billsRef=ref(db,"bills/"+uid)
+
+onValue(billsRef,(snapshot)=>{
+
+allBills=[]
+
+snapshot.forEach(data=>{
+let bill=data.val()
+allBills.push(bill)
+})
+
+processData(allBills)
+
+})
+
+}
+
+
+window.applyMonthFilter=function(){
+
+let month=document.getElementById("monthFilter").value
+
+if(month===""){
+processData(allBills)
+}
+else{
+
+let filtered=allBills.filter(b=>{
+let d=parseDate(b.date)
+return d.getMonth()==month
+})
+
+processData(filtered)
+
+}
+
+}
+
+
+function processData(bills){
+
+let categories={
+Food:0,
+Travel:0,
+Shopping:0,
+Bills:0,
+Other:0
+}
+
+let monthly={
+Jan:0,Feb:0,Mar:0,Apr:0,May:0,Jun:0,
+Jul:0,Aug:0,Sep:0,Oct:0,Nov:0,Dec:0
+}
+
+let total=0
+
+bills.forEach(b=>{
+
+categories[b.category]+=Number(b.amount)
+
+let d=parseDate(b.date)
+
+let month=d.toLocaleString("default",{month:"short"})
+
+monthly[month]+=Number(b.amount)
+
+total+=Number(b.amount)
+
+})
+
+updateCards(total,bills,categories)
+updateCategoryTable(categories)
+updatePieChart(categories)
+updateMonthlyChart(monthly)
+updateTopExpenses(bills)
+generateInsights(bills,categories,total)
+
+}
+
+
+function updateCards(total,bills,categories){
+
+document.getElementById("totalSpend").innerText="Rs "+total
+
+let avg=bills.length ? Math.round(total/bills.length) : 0
+
+document.getElementById("avgExpense").innerText="Rs "+avg
+
+let top=Object.entries(categories)
+.sort((a,b)=>b[1]-a[1])[0][0]
+
+document.getElementById("topCategory").innerText=top
+
+}
+
+
+function updateCategoryTable(data){
+
+let table=document.getElementById("summaryTable")
+
+table.innerHTML=""
+
+Object.keys(data).forEach(cat=>{
+
+table.innerHTML+=`
+<tr>
+<td>${cat}</td>
+<td>Rs ${data[cat]}</td>
+</tr>
+`
+
+})
+
+}
+
+
+function updateTopExpenses(bills){
+
+let sorted=[...bills]
+.sort((a,b)=>b.amount-a.amount)
+.slice(0,3)
+
+let table=document.getElementById("topExpenses")
+
+table.innerHTML=""
+
+sorted.forEach(b=>{
+
+table.innerHTML+=`
+<tr>
+<td>${b.date}</td>
+<td>${b.name}</td>
+<td>${b.category}</td>
+<td>Rs ${b.amount}</td>
+</tr>
+`
+
+})
+
+}
+
+
+function updatePieChart(data){
+
+if(pieChart) pieChart.destroy()
+
+pieChart=new Chart(document.getElementById("expenseChart"),{
+
+type:"pie",
+
+data:{
+labels:Object.keys(data),
+datasets:[{
+data:Object.values(data),
+backgroundColor:[
+"#14b8a6",
+"#ef4444",
+"#6366f1",
+"#f59e0b",
+"#10b981"
+]
+}]
+}
+
+})
+
+}
+
+
+function updateMonthlyChart(data){
+
+if(monthlyChart) monthlyChart.destroy()
+
+monthlyChart=new Chart(document.getElementById("monthlyChart"),{
+
+type:"line",
+
+data:{
+labels:Object.keys(data),
+datasets:[{
+label:"Monthly Spending",
+data:Object.values(data),
+borderColor:"#14b8a6",
+fill:false
+}]
+}
+
+})
+
+}
+
+
+function generateInsights(bills,categories,total){
+
+let list=document.getElementById("insights")
+
+list.innerHTML=""
+
+if(bills.length==0) return
+
+let largest=[...bills].sort((a,b)=>b.amount-a.amount)[0]
+
+list.innerHTML+=`<li>Largest expense was <b>${largest.name}</b> costing Rs ${largest.amount}</li>`
+
+let top=Object.entries(categories)
+.sort((a,b)=>b[1]-a[1])[0]
+
+list.innerHTML+=`<li>You spend the most on <b>${top[0]}</b></li>`
+
+let avg=Math.round(total/bills.length)
+
+list.innerHTML+=`<li>Your average expense is <b>Rs ${avg}</b></li>`
+
+}
+
+
+window.goBack=function(){
+window.location="bills.html"
+}
+
+</script>
+
+</body>
+
+</html>

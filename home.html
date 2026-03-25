@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+
+<title>Home</title>
+
+<link rel="stylesheet" href="css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+</head>
+
+<body>
+
+<div class="app-layout">
+
+<div class="sidebar">
+
+<h3>PocketLedger</h3>
+
+<a href="home.html">Home</a>
+<a href="dashboard.html">Dashboard</a>
+<a href="bills.html">My Bills</a>
+<a onclick="logout()">Logout</a>
+
+</div>
+
+<div class="main-content">
+
+<h2>Welcome 👋</h2>
+
+<div class="home-cards">
+
+<div class="home-card">
+
+<h3>Ledger Overview</h3>
+
+<canvas id="ledgerMiniChart" height="120"></canvas>
+
+<a href="dashboard.html">Open Dashboard</a>
+
+</div>
+
+<div class="home-card">
+
+<h3>Monthly Spending</h3>
+
+<canvas id="billMiniChart" height="120"></canvas>
+
+<a href="bills.html">Open Bills</a>
+
+</div>
+
+</div>
+
+</div>
+</div>
+
+<script type="module">
+
+import {
+auth,db,
+ref,get,child,onAuthStateChanged,signOut
+} from "./js/firebase.js"
+
+let uid
+
+onAuthStateChanged(auth,user=>{
+if(user){
+uid=user.uid
+loadLedgerChart()
+loadBillsChart()
+}else{
+window.location="index.html"
+}
+})
+
+window.logout=function(){
+signOut(auth)
+window.location="index.html"
+}
+
+function loadLedgerChart(){
+
+let paid=0
+let received=0
+
+get(child(ref(db),"payments/"+uid))
+.then(snapshot=>{
+
+snapshot.forEach(person=>{
+person.forEach(payment=>{
+
+let p=payment.val()
+
+if(p.type==="paid") paid+=Number(p.amount)
+else received+=Number(p.amount)
+
+})
+})
+
+new Chart(document.getElementById("ledgerMiniChart"),{
+type:"doughnut",
+data:{
+labels:["Paid","Received"],
+datasets:[{
+data:[paid,received],
+backgroundColor:["#ef4444","#10b981"]
+}]
+},
+options:{plugins:{legend:{display:false}}}
+})
+
+})
+
+}
+
+function loadBillsChart(){
+
+let monthly={Jan:0,Feb:0,Mar:0,Apr:0,May:0,Jun:0,Jul:0,Aug:0,Sep:0,Oct:0,Nov:0,Dec:0}
+
+get(child(ref(db),"bills/"+uid))
+.then(snapshot=>{
+
+snapshot.forEach(data=>{
+
+let bill=data.val()
+let date=new Date(bill.date)
+let month=date.toLocaleString('default',{month:'short'})
+
+monthly[month]+=bill.amount
+
+})
+
+new Chart(document.getElementById("billMiniChart"),{
+type:"bar",
+data:{
+labels:Object.keys(monthly),
+datasets:[{
+data:Object.values(monthly),
+backgroundColor:"#ef4444"
+}]
+},
+options:{plugins:{legend:{display:false}}}
+})
+
+})
+
+}
+
+</script>
+
+</body>
+</html>

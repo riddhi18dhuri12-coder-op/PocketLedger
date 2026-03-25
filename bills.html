@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+
+<title>My Bills</title>
+
+<link rel="stylesheet" href="css/style.css">
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+
+</head>
+
+<body>
+
+<div class="app-layout">
+
+<div class="sidebar">
+
+<h2>PocketLedger</h2>
+
+<a href="home.html">Home</a>
+<a href="dashboard.html">Dashboard</a>
+<a href="bills.html">My Bills</a>
+<a onclick="logout()">Logout</a>
+
+</div>
+
+
+<div class="main-content">
+
+<div class="container">
+
+<h2>My Bills</h2>
+
+<h3>Add Expense</h3>
+
+<input id="billName" placeholder="Expense name">
+
+<input id="billAmount" type="number" placeholder="Amount">
+
+<select id="category">
+<option>Food</option>
+<option>Travel</option>
+<option>Shopping</option>
+<option>Bills</option>
+<option>Other</option>
+</select>
+
+<button onclick="addBill()">Add Expense</button>
+
+<hr>
+
+<h3>Filters</h3>
+
+<select id="filterCategory" onchange="applyFilters()">
+<option value="">All Categories</option>
+<option>Food</option>
+<option>Travel</option>
+<option>Shopping</option>
+<option>Bills</option>
+<option>Other</option>
+</select>
+
+<select id="amountFilter" onchange="applyFilters()">
+<option value="">Amount Filter</option>
+<option value="gt">Greater Than</option>
+<option value="lt">Less Than</option>
+</select>
+
+<input id="amountValue" type="number" placeholder="Amount" oninput="applyFilters()">
+
+<select id="monthSort" onchange="applyFilters()">
+<option value="">Sort by Month</option>
+<option value="asc">Oldest</option>
+<option value="desc">Newest</option>
+</select>
+
+<button onclick="clearFilters()">Clear Filters</button>
+
+<select onchange="downloadMonthly(this.value)">
+<option value="">Download Monthly Sheet</option>
+<option value="pdf">PDF</option>
+<option value="excel">Excel</option>
+<option value="csv">CSV</option>
+</select>
+
+<button onclick="goToAnalytics()">Expense Analytics</button>
+
+<hr>
+
+<h3>Expenses List</h3>
+
+<table>
+
+<thead>
+<tr>
+<th>Name</th>
+<th>Category</th>
+<th>Amount</th>
+<th>Date</th>
+<th>Action</th>
+</tr>
+</thead>
+
+<tbody id="billTable"></tbody>
+
+</table>
+
+</div>
+
+</div>
+
+</div>
+
+<script type="module">
+
+import {
+auth,db,
+ref,push,set,get,child,remove,update,
+onAuthStateChanged,signOut
+} from "./js/firebase.js"
+
+let uid
+let bills=[]
+
+window.logout=function(){
+signOut(auth)
+window.location="index.html"
+}
+
+window.goToAnalytics=function(){
+window.location="expenseAnalytics.html"
+}
+
+onAuthStateChanged(auth,user=>{
+
+if(user){
+uid=user.uid
+loadBills()
+}else{
+window.location="index.html"
+}
+
+})
+
+window.addBill=async function(){
+
+let name=document.getElementById("billName").value
+let amount=document.getElementById("billAmount").value
+let category=document.getElementById("category").value
+
+if(name==="" || amount===""){
+alert("Enter expense details")
+return
+}
+
+let date=new Date().toLocaleDateString()
+
+let newRef=push(ref(db,"bills/"+uid))
+
+await set(newRef,{
+name:name,
+amount:Number(amount),
+date:date,
+category:category
+})
+
+document.getElementById("billName").value=""
+document.getElementById("billAmount").value=""
+
+loadBills()
+
+}
+
+function loadBills(){
+
+bills=[]
+
+get(child(ref(db),"bills/"+uid))
+.then(snapshot=>{
+
+if(!snapshot.exists()){
+displayBills([])
+return
+}
+
+snapshot.forEach(data=>{
+
+let bill=data.val()
+bill.id=data.key
+
+bills.push(bill)
+
+})
+
+displayBills(bills)
+
+})
+
+}
+
+function displayBills(list){
+
+let table=document.getElementById("billTable")
+table.innerHTML=""
+
+list.forEach(b=>{
+
+table.innerHTML+=`
+<tr>
+<td>${b.name}</td>
+<td>${b.category}</td>
+<td>Rs ${b.amount}</td>
+<td>${b.date}</td>
+<td>
+<button onclick="editBill('${b.id}')">Edit</button>
+<button onclick="deleteBill('${b.id}')">Delete</button>
+</td>
+</tr>
+`
+
+})
+
+}
+
+window.deleteBill=function(id){
+
+remove(ref(db,"bills/"+uid+"/"+id))
+loadBills()
+
+}
+
+window.editBill=function(id){
+
+let newAmount=prompt("Enter new amount")
+
+if(newAmount===null) return
+
+update(ref(db,"bills/"+uid+"/"+id),{
+amount:Number(newAmount)
+})
+
+loadBills()
+
+}
+
+window.applyFilters=function(){
+
+let category=document.getElementById("filterCategory").value
+let type=document.getElementById("amountFilter").value
+let amount=document.getElementById("amountValue").value
+let sort=document.getElementById("monthSort").value
+
+let result=[...bills]
+
+if(category!==""){
+result=result.filter(b=>b.category===category)
+}
+
+if(type==="gt"){
+result=result.filter(b=>b.amount>Number(amount))
+}
+
+if(type==="lt"){
+result=result.filter(b=>b.amount<Number(amount))
+}
+
+if(sort==="asc"){
+result.sort((a,b)=>new Date(a.date)-new Date(b.date))
+}
+
+if(sort==="desc"){
+result.sort((a,b)=>new Date(b.date)-new Date(a.date))
+}
+
+displayBills(result)
+
+}
+
+window.clearFilters=function(){
+
+document.getElementById("filterCategory").value=""
+document.getElementById("amountFilter").value=""
+document.getElementById("amountValue").value=""
+document.getElementById("monthSort").value=""
+
+displayBills(bills)
+
+}
+
+window.downloadMonthly=function(type){
+
+if(type==="pdf"){
+
+const { jsPDF } = window.jspdf
+
+let doc = new jsPDF()
+
+// Header
+doc.setFontSize(20)
+doc.text("PocketLedger", 80, 15)
+
+doc.setFontSize(14)
+doc.text("Monthly Expense Statement", 65, 25)
+
+doc.setFontSize(10)
+doc.text("Generated on: " + new Date().toLocaleDateString(), 150, 15)
+
+let startY = 40
+
+// Table header
+doc.setFontSize(12)
+
+doc.rect(15,startY-6,180,10)
+
+doc.text("Date",20,startY)
+doc.text("Expense",60,startY)
+doc.text("Category",110,startY)
+doc.text("Amount",160,startY)
+
+let y = startY + 10
+
+let total = 0
+
+bills.forEach(b=>{
+
+doc.rect(15,y-6,180,10)
+
+doc.text(String(b.date),20,y)
+doc.text(String(b.name),60,y)
+doc.text(String(b.category),110,y)
+doc.text("Rs "+String(b.amount),160,y)
+
+total += Number(b.amount)
+
+y += 10
+
+})
+
+// Total section
+doc.setFontSize(13)
+
+doc.line(120,y,195,y)
+
+y += 10
+
+doc.text("Total Monthly Expense:",110,y)
+doc.text("Rs "+total,160,y)
+
+// Footer
+doc.setFontSize(9)
+doc.text("PocketLedger Expense Report",70,285)
+
+doc.save("monthly_expenses.pdf")
+
+}
+
+if(type==="excel"){
+
+let data=bills.map(b=>({
+Name:b.name,
+Category:b.category,
+Amount:b.amount,
+Date:b.date
+}))
+
+let ws=XLSX.utils.json_to_sheet(data)
+let wb=XLSX.utils.book_new()
+
+XLSX.utils.book_append_sheet(wb,ws,"Expenses")
+
+XLSX.writeFile(wb,"monthly_expenses.xlsx")
+
+}
+
+if(type==="csv"){
+
+let rows="Name,Category,Amount,Date\n"
+
+bills.forEach(b=>{
+rows+=`${b.name},${b.category},${b.amount},${b.date}\n`
+})
+
+let blob=new Blob([rows],{type:"text/csv"})
+let url=URL.createObjectURL(blob)
+
+let a=document.createElement("a")
+a.href=url
+a.download="monthly_expenses.csv"
+a.click()
+
+}
+
+}
+
+</script>
+
+</body>
+
+</html>

@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Signup</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+
+<body>
+
+<h2>Create Account</h2>
+
+<input id="email" placeholder="Email">
+<input id="password" type="password" placeholder="Password">
+
+<button onclick="signup()">Signup</button>
+
+<a href="index.html">Login</a>
+
+<script type="module">
+
+import {auth, createUserWithEmailAndPassword} from "./js/firebase.js"
+
+window.signup = function(){
+
+let email=document.getElementById("email").value
+let password=document.getElementById("password").value
+
+createUserWithEmailAndPassword(auth,email,password)
+.then(()=>{
+alert("Account Created")
+window.location="dashboard.html"
+})
+.catch(e=>alert(e.message))
+
+}
+
+</script>
+
+</body>
+</html>

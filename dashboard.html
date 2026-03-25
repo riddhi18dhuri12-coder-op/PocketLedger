@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+
+<title>Ledger Dashboard</title>
+
+<link rel="stylesheet" href="css/style.css">
+
+</head>
+
+<body>
+
+<div class="app-layout">
+
+<div class="sidebar">
+<h2>PocketLedger</h2>
+
+<a href="home.html">Home</a>
+<a href="dashboard.html">Dashboard</a>
+<a href="bills.html">My Bills</a>
+<a onclick="logout()">Logout</a>
+
+</div>
+
+
+<div class="main-content">
+
+<div class="container">
+
+<h2>Ledger Dashboard</h2>
+
+<div class="stats">
+
+<div class="stat-card">
+<span>Total Paid</span>
+<h3 id="totalPaid">₹0</h3>
+</div>
+
+<div class="stat-card">
+<span>Total Received</span>
+<h3 id="totalReceived">₹0</h3>
+</div>
+
+<div class="stat-card">
+<span>Balance</span>
+<h3 id="balance">₹0</h3>
+</div>
+
+</div>
+
+<hr>
+
+<h3>Add Person</h3>
+
+<input id="name" placeholder="Person Name">
+<input id="phone" placeholder="Phone Number">
+
+<button onclick="addPerson()">Add Person</button>
+
+<hr>
+
+<h3>People List</h3>
+
+<input id="search" placeholder="Search person..." onkeyup="searchPeople()">
+
+<table>
+
+<thead>
+<tr>
+<th>Name</th>
+<th>Phone</th>
+<th>Details</th>
+</tr>
+</thead>
+
+<tbody id="peopleTable"></tbody>
+
+</table>
+
+</div>
+
+</div>
+
+</div>
+
+
+<script type="module">
+
+import {
+auth,db,
+ref,push,set,get,child,onValue,
+onAuthStateChanged,signOut
+} from "./js/firebase.js"
+
+let uid
+let peopleData=[]
+
+onAuthStateChanged(auth,user=>{
+
+if(user){
+
+uid=user.uid
+
+loadPeople()
+loadTotals()
+
+}else{
+
+window.location="index.html"
+
+}
+
+})
+
+
+window.logout=function(){
+
+signOut(auth)
+window.location="index.html"
+
+}
+
+
+window.addPerson=function(){
+
+let name=document.getElementById("name").value
+let phone=document.getElementById("phone").value
+
+if(name===""){
+alert("Enter person name")
+return
+}
+
+let newRef=push(ref(db,"people/"+uid))
+
+set(newRef,{
+name:name,
+phone:phone
+})
+
+document.getElementById("name").value=""
+document.getElementById("phone").value=""
+
+loadPeople()
+
+}
+
+
+function loadPeople(){
+
+peopleData=[]
+
+let table=document.getElementById("peopleTable")
+table.innerHTML=""
+
+get(child(ref(db),"people/"+uid))
+.then(snapshot=>{
+
+if(!snapshot.exists()) return
+
+snapshot.forEach(data=>{
+
+let person=data.val()
+person.id=data.key
+
+peopleData.push(person)
+
+})
+
+displayPeople(peopleData)
+
+})
+
+}
+
+
+function displayPeople(list){
+
+let table=document.getElementById("peopleTable")
+
+table.innerHTML=""
+
+list.forEach(p=>{
+
+table.innerHTML+=`
+
+<tr>
+
+<td>${p.name}</td>
+
+<td>${p.phone || "-"}</td>
+
+<td>
+<button onclick="openPerson('${p.id}')">View</button>
+</td>
+
+</tr>
+
+`
+
+})
+
+}
+
+
+window.searchPeople=function(){
+
+let text=document.getElementById("search").value.toLowerCase()
+
+let filtered=peopleData.filter(p=>{
+
+return p.name.toLowerCase().includes(text)
+
+})
+
+displayPeople(filtered)
+
+}
+
+
+window.openPerson=function(id){
+
+localStorage.setItem("personID",id)
+
+window.location="person.html"
+
+}
+
+
+function loadTotals(){
+
+const paymentsRef=ref(db,"payments/"+uid)
+
+onValue(paymentsRef,(snapshot)=>{
+
+let paid=0
+let received=0
+
+if(snapshot.exists()){
+
+snapshot.forEach(person=>{
+
+person.forEach(payment=>{
+
+let p=payment.val()
+
+if(p.type==="paid")
+paid+=Number(p.amount)
+
+else
+received+=Number(p.amount)
+
+})
+
+})
+
+}
+
+document.getElementById("totalPaid").innerText="₹ "+paid
+document.getElementById("totalReceived").innerText="₹ "+received
+document.getElementById("balance").innerText="₹ "+(received-paid)
+
+})
+
+}
+
+</script>
+
+</body>
+
+</html>
